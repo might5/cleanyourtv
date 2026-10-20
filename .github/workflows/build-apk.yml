@@ -4,17 +4,21 @@ name: Build CleanYourTV APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Download source archive from repository
-        uses: actions/checkout@v4
 
-      - name: Extract source
+    steps:
+      - name: Download official source
         run: |
-          unzip cleanyourtv-2.3.0.zip -d source
-          echo "PROJECT_DIR=$PWD/source/cleanyourtv-2.3.0/launcher" >> "$GITHUB_ENV"
+          curl -fL --retry 3 \
+            https://github.com/Gathin23/cleanyourtv/archive/refs/tags/v2.3.0.zip \
+            -o source.zip
+          unzip -t source.zip
+          unzip source.zip -d source
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -22,23 +26,21 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Build APK
+      - name: Build launcher APK
         working-directory: source/cleanyourtv-2.3.0/launcher
-        run: gradle assembleRelease
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: cleanyourtv-v2.3.0-apk
           path: source/cleanyourtv-2.3.0/launcher/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
