@@ -14,13 +14,14 @@ jobs:
     steps:
       - name: Download official source
         run: |
+          set -e
           curl -fL --retry 3 \
             https://github.com/Gathin23/cleanyourtv/archive/refs/tags/v2.3.0.zip \
             -o source.zip
           unzip -t source.zip
           unzip source.zip -d source
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,16 +29,17 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
 
-      - name: Build launcher APK
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install "platforms;android-34"
+          sdkmanager --install "build-tools;34.0.0"
+
+      - name: Build release APK
         working-directory: source/cleanyourtv-2.3.0/launcher
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew --no-daemon assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -45,3 +47,4 @@ jobs:
           name: cleanyourtv-v2.3.0-apk
           path: source/cleanyourtv-2.3.0/launcher/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+          retention-days: 7
