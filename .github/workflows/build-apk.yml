@@ -27,13 +27,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Locate Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
 
       - name: Install Android SDK packages
         run: |
-          sdkmanager --install "platforms;android-34"
-          sdkmanager --install "build-tools;34.0.0"
+          set -e
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Cannot find sdkmanager in $SDK"
+            exit 1
+          fi
+          "$SDKMANAGER" --install "platforms;android-34"
+          "$SDKMANAGER" --install "build-tools;34.0.0"
 
       - name: Build release APK
         working-directory: source/cleanyourtv-2.3.0/launcher
