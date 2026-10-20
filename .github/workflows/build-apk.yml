@@ -28,9 +28,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        with:
+          packages: |
+            platforms;android-34
+            build-tools;34.0.0
 
       - name: Build launcher APK
         working-directory: source/cleanyourtv-2.3.0/launcher
