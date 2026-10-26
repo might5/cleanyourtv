@@ -1,4 +1,4 @@
-
+```yaml
 name: Build CleanYourTV APK
 
 on:
@@ -12,48 +12,100 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. 下载官方 main 分支源码，并统一解压目录
       - name: Download official source
         run: |
           set -e
+
           curl -fL --retry 3 \
             https://github.com/Gathin23/cleanyourtv/archive/refs/heads/main.zip \
             -o source.zip
+
           unzip -t source.zip
+
+          mkdir -p source
           unzip source.zip -d source
 
+          mv source/cleanyourtv-main source/project
+
+          echo "Source directory:"
+          ls -la source/project
+
+      # 2. 配置 Java 17
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3. 配置 Android SDK
       - name: Locate Android SDK
         run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
 
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+          echo "Android SDK: $SDK"
+          ls -la "$SDK"
+
+      # 4. 安装 Android SDK 编译组件
       - name: Install Android SDK packages
         run: |
           set -e
+
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          SDKMANAGER="$(find "$SDK/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+
+          SDKMANAGER="$(find "$SDK/cmdline-tools" \
+            -type f -name sdkmanager | head -n 1)"
+
           if [ -z "$SDKMANAGER" ]; then
-            echo "Cannot find sdkmanager in $SDK"
+            echo "ERROR: sdkmanager not found"
             exit 1
           fi
+
+          yes | "$SDKMANAGER" --licenses || true
+
           "$SDKMANAGER" --install "platforms;android-34"
           "$SDKMANAGER" --install "build-tools;34.0.0"
 
-      - name: Build release APK
-        working-directory: source/cleanyourtv-2.3.0/launcher
+      # 5. 检查项目结构
+      - name: Inspect project
+        working-directory: source/project
         run: |
+          echo "Project files:"
+          ls -la
+
+          echo "Launcher files:"
+          ls -la launcher
+
+          if [ ! -f launcher/gradlew ]; then
+            echo "ERROR: launcher/gradlew not found"
+            exit 1
+          fi
+
+          if [ ! -f launcher/settings.gradle ] && \
+             [ ! -f launcher/settings.gradle.kts ]; then
+            echo "ERROR: Gradle settings file not found in launcher"
+            exit 1
+          fi
+
+      # 6. 编译桌面 APK
+      - name: Build release APK
+        working-directory: source/project/launcher
+        run: |
+          set -e
+
           chmod +x gradlew
+
           ./gradlew --no-daemon assembleRelease
 
+      # 7. 上传生成的 APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: cleanyourtv-v2.3.0-apk
-          path: source/cleanyourtv-2.3.0/launcher/app/build/outputs/apk/release/*.apk
+          name: cleanyourtv-latest-apk
+          path: source/project/launcher/**/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 7
+```
