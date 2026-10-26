@@ -1,4 +1,4 @@
-name: Build CleanYourTV APK
+name: Build CleanYourTV Latest APK
 
 on:
   workflow_dispatch:
@@ -11,35 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download CleanYourTV v3.0.0
+      - name: Download latest official source
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
           curl -fL --retry 3 \
-            https://github.com/Gathin23/cleanyourtv/archive/refs/tags/v3.0.0.zip \
+            https://github.com/Gathin23/cleanyourtv/archive/refs/heads/main.zip \
             -o source.zip
 
           unzip -t source.zip
           mkdir -p source
           unzip -q source.zip -d source
 
-          PROJECT_DIR="$(find source -mindepth 1 -maxdepth 1 \
-            -type d -name 'cleanyourtv-*' | head -n 1)"
+          SOURCE_DIR="$(find source -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: Cannot locate the source directory"
+          if [ -z "$SOURCE_DIR" ]; then
+            echo "ERROR: Source directory not found"
             exit 1
           fi
 
-          if [ ! -d "$PROJECT_DIR/launcher" ]; then
-            echo "ERROR: Launcher directory not found"
-            exit 1
-          fi
+          echo "SOURCE_DIR=$GITHUB_WORKSPACE/$SOURCE_DIR" >> "$GITHUB_ENV"
 
-          echo "PROJECT_DIR=$GITHUB_WORKSPACE/$PROJECT_DIR" >> "$GITHUB_ENV"
-
-          echo "Source directory: $PROJECT_DIR"
-          ls -la "$PROJECT_DIR/launcher"
+          echo "Downloaded latest main branch:"
+          ls -la "$SOURCE_DIR"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -48,18 +43,16 @@ jobs:
           java-version: '17'
 
       - name: Locate Android SDK
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
-          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
 
           if [ ! -d "$SDK" ]; then
-            echo "ERROR: Android SDK not found at $SDK"
+            echo "ERROR: Android SDK not found: $SDK"
             exit 1
           fi
-
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
 
           SDKMANAGER="$(find "$SDK/cmdline-tools" \
             -type f -name sdkmanager 2>/dev/null | head -n 1)"
@@ -69,49 +62,71 @@ jobs:
             exit 1
           fi
 
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
           yes | "$SDKMANAGER" --licenses || true
 
           "$SDKMANAGER" --install "platforms;android-34"
           "$SDKMANAGER" --install "build-tools;34.0.0"
 
-      - name: Check Gradle project
+      - name: Locate Gradle project
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
-          cd "$PROJECT_DIR/launcher"
+          GRADLE_WRAPPER="$(find "$SOURCE_DIR" \
+            -type f -name gradlew -print -quit)"
 
-          if [ ! -f gradlew ]; then
-            echo "ERROR: Gradle Wrapper not found"
+          if [ -z "$GRADLE_WRAPPER" ]; then
+            echo "ERROR: Gradle Wrapper not found."
+            find "$SOURCE_DIR" -maxdepth 4 -type f | head -n 100
             exit 1
           fi
 
-          if [ ! -f app/build.gradle ] && \
-             [ ! -f app/build.gradle.kts ]; then
-            echo "ERROR: Launcher app build file not found"
-            exit 1
-          fi
+          PROJECT_DIR="$(dirname "$GRADLE_WRAPPER")"
 
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          echo "Gradle project directory: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR"
+
+      - name: Build latest release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$PROJECT_DIR"
           chmod +x gradlew
-          ./gradlew --version
-
-      - name: Build release APK
-        run: |
-          set -eu
-
-          cd "$PROJECT_DIR/launcher"
-
           ./gradlew --no-daemon assembleRelease
 
-      - name: Upload APK
+      - name: Locate generated APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK_FILES="$(find "$PROJECT_DIR" \
+            -type f \
+            -name '*.apk' \
+            -path '*/build/outputs/apk/*')"
+
+          if [ -z "$APK_FILES" ]; then
+            echo "ERROR: No APK generated."
+            exit 1
+          fi
+
+          echo "$APK_FILES"
+
+      - name: Upload latest APK
         uses: actions/upload-artifact@v4
         with:
-          name: cleanyourtv-v3.0.0-apk
-          path: ${{ env.PROJECT_DIR }}/launcher/app/build/outputs/apk/release/*.apk
+          name: cleanyourtv-latest-apk
+          path: source/**/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 7
