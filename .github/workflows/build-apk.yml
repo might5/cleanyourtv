@@ -16,7 +16,7 @@ jobs:
         run: |
           set -e
           curl -fL --retry 3 \
-            https://github.com/Gathin23/cleanyourtv/archive/refs/tags/v2.3.0.zip \
+            https://github.com/Gathin23/cleanyourtv/archive/refs/heads/main.zip \
             -o source.zip
           unzip -t source.zip
           unzip source.zip -d source
